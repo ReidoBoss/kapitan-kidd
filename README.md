@@ -1,1 +1,2 @@
-# kapitan-kidd
+# Kapitan Kiddo
+- an app for kapitanos y kapitanas!
