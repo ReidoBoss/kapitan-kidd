@@ -6,6 +6,7 @@ import { AssignmentsSection } from "@/features/vessel-crews/components/assignmen
 import { VesselsSection } from "@/features/vessels/components/vessels-section";
 import { VesselsProvider } from "@/features/vessels/vessels-context";
 import { CaptainWorkOrdersSection } from "@/features/work-orders/components/captain-work-orders-section";
+import { CrewWorkOrdersSection } from "@/features/work-orders/components/crew-work-orders-section";
 
 export default function Home() {
   const { activeUser, loading, error } = useSession();
@@ -31,6 +32,8 @@ export default function Home() {
       <div className="mt-4 border-b border-rule" />
 
       {activeUser.role === "Captain" && <CaptainWorkOrdersSection />}
+
+      {activeUser.role === "Crew" && <CrewWorkOrdersSection />}
 
       {activeUser.role === "Admin" && (
         <VesselsProvider>

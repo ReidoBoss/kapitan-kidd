@@ -3,25 +3,28 @@ import type { WorkOrder } from "./types";
 
 export type WorkOrderWithNames = WorkOrder & {
   crewName: string;
+  creatorName: string;
   vesselName: string;
 };
 
 /*
-Two FKs point at users, so the assigned-crew embed needs the explicit FK name.
+Two FKs point at users, so the user embeds need explicit FK names.
 */
 const WORK_ORDER_SELECT =
-  "*, assigned_crew:users!work_orders_assigned_crew_user_id_fkey(name), vessels(name)";
+  "*, assigned_crew:users!work_orders_assigned_crew_user_id_fkey(name), creator:users!work_orders_creator_user_id_fkey(name), vessels(name)";
 
 type WorkOrderRow = WorkOrder & {
   assigned_crew: { name: string };
+  creator: { name: string };
   vessels: { name: string };
 };
 
 function toWorkOrderWithNames(row: WorkOrderRow): WorkOrderWithNames {
-  const { assigned_crew, vessels, ...workOrder } = row;
+  const { assigned_crew, creator, vessels, ...workOrder } = row;
   return {
     ...workOrder,
     crewName: assigned_crew.name,
+    creatorName: creator.name,
     vesselName: vessels.name,
   };
 }
@@ -33,6 +36,19 @@ export async function fetchWorkOrdersCreatedBy(
     .from("work_orders")
     .select(WORK_ORDER_SELECT)
     .eq("creator_user_id", creatorUserId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data ?? []) as unknown as WorkOrderRow[]).map(toWorkOrderWithNames);
+}
+
+export async function fetchWorkOrdersAssignedTo(
+  crewUserId: string,
+): Promise<WorkOrderWithNames[]> {
+  const { data, error } = await supabase
+    .from("work_orders")
+    .select(WORK_ORDER_SELECT)
+    .eq("assigned_crew_user_id", crewUserId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
