@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { LedgerList } from "@/components/ui/ledger-list";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/features/auth/session-context";
+import { useMutation } from "@/lib/hooks/use-mutation";
+import { useQuery } from "@/lib/hooks/use-query";
 import {
   completeWorkOrder,
   fetchWorkOrdersAssignedTo,
@@ -14,49 +17,28 @@ import { StatusStamp } from "./status-stamp";
 
 export function CrewWorkOrdersSection() {
   const { activeUser } = useSession();
-  const [orders, setOrders] = useState<WorkOrderWithNames[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const crewId = activeUser?.id ?? null;
 
-  const crewId = activeUser?.id;
-
-  useEffect(() => {
-    if (!crewId) return;
-    let cancelled = false;
-
-    setLoading(true);
-    fetchWorkOrdersAssignedTo(crewId)
-      .then((fetched) => {
-        if (!cancelled) setOrders(fetched);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load work orders.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [crewId]);
+  const ordersQuery = useQuery(
+    () =>
+      crewId
+        ? fetchWorkOrdersAssignedTo(crewId)
+        : Promise.resolve<WorkOrderWithNames[]>([]),
+    [crewId],
+    "Failed to load work orders.",
+  );
+  const start = useMutation(startWorkOrder, {
+    onSuccess: ordersQuery.refetch,
+    errorMessage: "Failed to update work order.",
+  });
+  const complete = useMutation(completeWorkOrder, {
+    onSuccess: ordersQuery.refetch,
+    errorMessage: "Failed to update work order.",
+  });
 
   if (!crewId) return null;
 
-  const runAction = async (orderId: string, action: () => Promise<void>) => {
-    if (busyId) return;
-    setBusyId(orderId);
-    setError(null);
-    try {
-      await action();
-      setOrders(await fetchWorkOrdersAssignedTo(crewId));
-    } catch {
-      setError("Failed to update work order.");
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const error = ordersQuery.error ?? start.error ?? complete.error;
 
   return (
     <section className="mt-8">
@@ -66,34 +48,28 @@ export function CrewWorkOrdersSection() {
 
       {error && <p className="mt-2 text-sm text-accent">{error}</p>}
 
-      <ul className="mt-2 border-t border-rule">
-        {loading && (
-          <li className="py-2 text-sm italic text-muted">
-            Loading work orders…
-          </li>
-        )}
-        {!loading && !error && orders.length === 0 && (
-          <li className="py-2 text-sm italic text-muted">
-            No work orders assigned to you.
-          </li>
-        )}
-        {orders.map((order) => (
-          <CrewOrderItem
-            key={order.id}
+      <LedgerList
+        items={ordersQuery.data ?? []}
+        getKey={(order) => order.id}
+        loading={ordersQuery.loading}
+        loadingText="Loading work orders…"
+        emptyText="No work orders assigned to you."
+        className="mt-2 border-t border-rule"
+        rowClassName="py-3"
+        renderItem={(order) => (
+          <CrewOrderEntry
             order={order}
-            busy={busyId === order.id}
-            onStart={() => runAction(order.id, () => startWorkOrder(order.id))}
-            onComplete={(solution) =>
-              runAction(order.id, () => completeWorkOrder(order.id, solution))
-            }
+            busy={start.busyOn === order.id || complete.busyOn === order.id}
+            onStart={() => start.run(order.id)}
+            onComplete={(solution) => complete.run(order.id, solution)}
           />
-        ))}
-      </ul>
+        )}
+      />
     </section>
   );
 }
 
-function CrewOrderItem({
+function CrewOrderEntry({
   order,
   busy,
   onStart,
@@ -107,7 +83,7 @@ function CrewOrderItem({
   const [solution, setSolution] = useState(order.solution ?? "");
 
   return (
-    <li className="border-b border-rule py-3">
+    <>
       <div className="flex items-baseline justify-between gap-4">
         <span className="font-mono text-xs text-muted">
           WO-{order.id.slice(0, 8)}
@@ -174,6 +150,6 @@ function CrewOrderItem({
           </p>
         </div>
       )}
-    </li>
+    </>
   );
 }

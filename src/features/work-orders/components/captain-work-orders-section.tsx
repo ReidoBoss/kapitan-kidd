@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LedgerList } from "@/components/ui/ledger-list";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/features/auth/session-context";
 import { fetchAssignments } from "@/features/vessel-crews/api";
-import type { Assignment } from "@/features/vessel-crews/types";
+import {
+  crewOnVessel,
+  vesselsCommandedBy,
+} from "@/features/vessel-crews/derive";
+import { useMutation } from "@/lib/hooks/use-mutation";
+import { useQuery } from "@/lib/hooks/use-query";
 import {
   attestWorkOrder,
   createWorkOrder,
@@ -17,110 +23,84 @@ import {
 } from "../api";
 import { StatusStamp } from "./status-stamp";
 
+const attestedOn = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
 export function CaptainWorkOrdersSection() {
   const { activeUser } = useSession();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [orders, setOrders] = useState<WorkOrderWithNames[]>([]);
+  const captainId = activeUser?.id ?? null;
+
+  const assignmentsQuery = useQuery(
+    fetchAssignments,
+    [],
+    "Failed to load assignments.",
+  );
+  const ordersQuery = useQuery(
+    () =>
+      captainId
+        ? fetchWorkOrdersCreatedBy(captainId)
+        : Promise.resolve<WorkOrderWithNames[]>([]),
+    [captainId],
+    "Failed to load work orders.",
+  );
+
   const [vesselId, setVesselId] = useState("");
   const [crewId, setCrewId] = useState("");
   const [title, setTitle] = useState("");
   const [issue, setIssue] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const captainId = activeUser?.id;
-
-  useEffect(() => {
-    if (!captainId) return;
-    let cancelled = false;
-
-    setLoading(true);
-    Promise.all([fetchAssignments(), fetchWorkOrdersCreatedBy(captainId)])
-      .then(([fetchedAssignments, fetchedOrders]) => {
-        if (cancelled) return;
-        setAssignments(fetchedAssignments);
-        setOrders(fetchedOrders);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load work orders.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [captainId]);
+  const logOrder = useMutation(createWorkOrder, {
+    onSuccess: ordersQuery.refetch,
+    errorMessage: "Failed to log work order.",
+  });
+  const attest = useMutation(attestWorkOrder, {
+    onSuccess: ordersQuery.refetch,
+    errorMessage: "Failed to attest work order.",
+  });
+  const reject = useMutation(rejectWorkOrder, {
+    onSuccess: ordersQuery.refetch,
+    errorMessage: "Failed to reject work order.",
+  });
 
   if (!captainId) return null;
 
-  const myVessels = assignments.filter((entry) => entry.userId === captainId);
-  const crewOnVessel = assignments.filter(
-    (entry) => entry.vesselId === vesselId && entry.userRole === "Crew",
-  );
+  const assignments = assignmentsQuery.data ?? [];
+  const myVessels = vesselsCommandedBy(assignments, captainId);
+  const crew = crewOnVessel(assignments, vesselId);
+  const loading = assignmentsQuery.loading || ordersQuery.loading;
+  const error =
+    assignmentsQuery.error ??
+    ordersQuery.error ??
+    logOrder.error ??
+    attest.error ??
+    reject.error;
 
   const handleVesselChange = (nextVesselId: string) => {
     setVesselId(nextVesselId);
     setCrewId("");
   };
 
-  const handleAttest = async (workOrderId: string) => {
-    if (busyId) return;
-    setBusyId(workOrderId);
-    setError(null);
-    try {
-      await attestWorkOrder(workOrderId);
-      setOrders(await fetchWorkOrdersCreatedBy(captainId));
-    } catch {
-      setError("Failed to attest work order.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleReject = async (workOrderId: string, reason: string) => {
-    if (busyId) return;
-    setBusyId(workOrderId);
-    setError(null);
-    try {
-      await rejectWorkOrder(workOrderId, reason);
-      setOrders(await fetchWorkOrdersCreatedBy(captainId));
-    } catch {
-      setError("Failed to reject work order.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedTitle = title.trim();
     const trimmedIssue = issue.trim();
-    if (!trimmedTitle || !trimmedIssue || !vesselId || !crewId || saving) {
-      return;
-    }
+    if (!trimmedTitle || !trimmedIssue || !vesselId || !crewId) return;
 
-    setSaving(true);
-    setError(null);
-    try {
-      await createWorkOrder({
-        creatorUserId: captainId,
-        assignedCrewUserId: crewId,
-        vesselId,
-        title: trimmedTitle,
-        issue: trimmedIssue,
-      });
-      setOrders(await fetchWorkOrdersCreatedBy(captainId));
+    const logged = await logOrder.run({
+      creatorUserId: captainId,
+      assignedCrewUserId: crewId,
+      vesselId,
+      title: trimmedTitle,
+      issue: trimmedIssue,
+    });
+    if (logged) {
       setTitle("");
       setIssue("");
       setCrewId("");
-    } catch {
-      setError("Failed to log work order.");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -158,11 +138,11 @@ export function CaptainWorkOrdersSection() {
               onChange={(event) => setCrewId(event.target.value)}
             >
               <option value="">
-                {vesselId && crewOnVessel.length === 0
+                {vesselId && crew.length === 0
                   ? "No crew on this vessel"
                   : "Assign to crew…"}
               </option>
-              {crewOnVessel.map((entry) => (
+              {crew.map((entry) => (
                 <option key={entry.userId} value={entry.userId}>
                   {entry.userName}
                 </option>
@@ -188,10 +168,14 @@ export function CaptainWorkOrdersSection() {
             <Button
               type="submit"
               disabled={
-                saving || !title.trim() || !issue.trim() || !vesselId || !crewId
+                logOrder.busy ||
+                !title.trim() ||
+                !issue.trim() ||
+                !vesselId ||
+                !crewId
               }
             >
-              {saving ? "Logging…" : "Log work order"}
+              {logOrder.busy ? "Logging…" : "Log work order"}
             </Button>
           </div>
         </form>
@@ -199,63 +183,70 @@ export function CaptainWorkOrdersSection() {
 
       {error && <p className="mt-2 text-sm text-accent">{error}</p>}
 
-      <ul className="mt-4 border-t border-rule">
-        {loading && (
-          <li className="py-2 text-sm italic text-muted">
-            Loading work orders…
-          </li>
+      <LedgerList
+        items={ordersQuery.data ?? []}
+        getKey={(order) => order.id}
+        loading={loading}
+        loadingText="Loading work orders…"
+        emptyText="No work orders logged."
+        rowClassName="py-3"
+        renderItem={(order) => (
+          <CaptainOrderEntry
+            order={order}
+            busy={attest.busyOn === order.id || reject.busyOn === order.id}
+            onAttest={() => attest.run(order.id)}
+            onReject={(reason) => reject.run(order.id, reason)}
+          />
         )}
-        {!loading && orders.length === 0 && (
-          <li className="py-2 text-sm italic text-muted">
-            No work orders logged.
-          </li>
-        )}
-        {orders.map((order) => (
-          <li key={order.id} className="border-b border-rule py-3">
-            <div className="flex items-baseline justify-between gap-4">
-              <span className="font-mono text-xs text-muted">
-                WO-{order.id.slice(0, 8)}
-              </span>
-              <StatusStamp status={order.status} />
-            </div>
-            <p className="text-lg font-bold">{order.title}</p>
-            <p className="text-sm text-muted">
-              {order.vesselName} &middot; assigned to {order.crewName}
-            </p>
-
-            {order.status === "Done" && (
-              <div className="mt-1 text-sm">
-                {order.solution && (
-                  <p>
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted">
-                      Solution&nbsp;
-                    </span>
-                    {order.solution}
-                  </p>
-                )}
-                {order.attested_at ? (
-                  <p className="italic text-done">
-                    Attested on{" "}
-                    {new Date(order.attested_at).toLocaleDateString(undefined, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                    .
-                  </p>
-                ) : (
-                  <ReviewControls
-                    busy={busyId === order.id}
-                    onAttest={() => handleAttest(order.id)}
-                    onReject={(reason) => handleReject(order.id, reason)}
-                  />
-                )}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+      />
     </section>
+  );
+}
+
+function CaptainOrderEntry({
+  order,
+  busy,
+  onAttest,
+  onReject,
+}: {
+  order: WorkOrderWithNames;
+  busy: boolean;
+  onAttest: () => void;
+  onReject: (reason: string) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="font-mono text-xs text-muted">
+          WO-{order.id.slice(0, 8)}
+        </span>
+        <StatusStamp status={order.status} />
+      </div>
+      <p className="text-lg font-bold">{order.title}</p>
+      <p className="text-sm text-muted">
+        {order.vesselName} &middot; assigned to {order.crewName}
+      </p>
+
+      {order.status === "Done" && (
+        <div className="mt-1 text-sm">
+          {order.solution && (
+            <p>
+              <span className="text-[11px] uppercase tracking-[0.2em] text-muted">
+                Solution&nbsp;
+              </span>
+              {order.solution}
+            </p>
+          )}
+          {order.attested_at ? (
+            <p className="italic text-done">
+              Attested on {attestedOn(order.attested_at)}.
+            </p>
+          ) : (
+            <ReviewControls busy={busy} onAttest={onAttest} onReject={onReject} />
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
