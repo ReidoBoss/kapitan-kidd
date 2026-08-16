@@ -91,6 +91,26 @@ export async function attestWorkOrder(workOrderId: string): Promise<void> {
 }
 
 /**
+Reject a Done work order: records the required reason and returns the
+order to the assigned crew as In Progress. Attested orders are final.
+*/
+export async function rejectWorkOrder(
+  workOrderId: string,
+  reason: string,
+): Promise<void> {
+  const from: WorkOrderStatus = "Done";
+  const to: WorkOrderStatus = "In Progress";
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status: to, rejection_reason: reason })
+    .eq("id", workOrderId)
+    .eq("status", from)
+    .is("attested_at", null);
+
+  if (error) throw error;
+}
+
+/**
 Open -> In Progress. The status filter guards against stale UI state.
 */
 export async function startWorkOrder(workOrderId: string): Promise<void> {
@@ -107,6 +127,7 @@ export async function startWorkOrder(workOrderId: string): Promise<void> {
 
 /**
 In Progress -> Done, documenting the solution in the same update.
+Clears any previous rejection reason so the resubmission arrives clean.
 */
 export async function completeWorkOrder(
   workOrderId: string,
@@ -116,7 +137,7 @@ export async function completeWorkOrder(
   const to: WorkOrderStatus = "Done";
   const { error } = await supabase
     .from("work_orders")
-    .update({ status: to, solution })
+    .update({ status: to, solution, rejection_reason: null })
     .eq("id", workOrderId)
     .eq("status", from);
 

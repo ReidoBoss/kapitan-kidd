@@ -12,6 +12,7 @@ import {
   attestWorkOrder,
   createWorkOrder,
   fetchWorkOrdersCreatedBy,
+  rejectWorkOrder,
   type WorkOrderWithNames,
 } from "../api";
 import { StatusStamp } from "./status-stamp";
@@ -75,6 +76,20 @@ export function CaptainWorkOrdersSection() {
       setOrders(await fetchWorkOrdersCreatedBy(captainId));
     } catch {
       setError("Failed to attest work order.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleReject = async (workOrderId: string, reason: string) => {
+    if (busyId) return;
+    setBusyId(workOrderId);
+    setError(null);
+    try {
+      await rejectWorkOrder(workOrderId, reason);
+      setOrders(await fetchWorkOrdersCreatedBy(captainId));
+    } catch {
+      setError("Failed to reject work order.");
     } finally {
       setBusyId(null);
     }
@@ -229,14 +244,11 @@ export function CaptainWorkOrdersSection() {
                     .
                   </p>
                 ) : (
-                  <div className="mt-2">
-                    <Button
-                      onClick={() => handleAttest(order.id)}
-                      disabled={busyId === order.id}
-                    >
-                      {busyId === order.id ? "Attesting…" : "Attest & close"}
-                    </Button>
-                  </div>
+                  <ReviewControls
+                    busy={busyId === order.id}
+                    onAttest={() => handleAttest(order.id)}
+                    onReject={(reason) => handleReject(order.id, reason)}
+                  />
                 )}
               </div>
             )}
@@ -244,5 +256,59 @@ export function CaptainWorkOrdersSection() {
         ))}
       </ul>
     </section>
+  );
+}
+
+function ReviewControls({
+  busy,
+  onAttest,
+  onReject,
+}: {
+  busy: boolean;
+  onAttest: () => void;
+  onReject: (reason: string) => void;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+
+  if (!rejecting) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button onClick={onAttest} disabled={busy}>
+          {busy ? "Attesting…" : "Attest & close"}
+        </Button>
+        <Button
+          onClick={() => setRejecting(true)}
+          disabled={busy}
+          className="border-accent text-accent hover:bg-accent/5"
+        >
+          Reject…
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      <Textarea
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder="Rejection reason (required)…"
+        aria-label="Rejection reason"
+        className="w-full sm:w-96"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => onReject(reason.trim())}
+          disabled={busy || !reason.trim()}
+          className="border-accent text-accent hover:bg-accent/5"
+        >
+          {busy ? "Rejecting…" : "Send back to crew"}
+        </Button>
+        <Button onClick={() => setRejecting(false)} disabled={busy}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }
