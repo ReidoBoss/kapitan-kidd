@@ -2,7 +2,9 @@
 
 import { useSession } from "@/features/auth/session-context";
 import { UsersSection } from "@/features/users/components/users-section";
+import { AssignmentsSection } from "@/features/vessel-crews/components/assignments-section";
 import { VesselsSection } from "@/features/vessels/components/vessels-section";
+import { VesselsProvider } from "@/features/vessels/vessels-context";
 
 export default function Home() {
   const { activeUser, loading, error } = useSession();
@@ -28,10 +30,11 @@ export default function Home() {
       <div className="mt-4 border-b border-rule" />
 
       {activeUser.role === "Admin" && (
-        <>
+        <VesselsProvider>
           <VesselsSection />
           <UsersSection />
-        </>
+          <AssignmentsSection />
+        </VesselsProvider>
       )}
     </div>
   );
