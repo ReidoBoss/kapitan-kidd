@@ -3,33 +3,34 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LedgerList } from "@/components/ui/ledger-list";
+import { useMutation } from "@/lib/hooks/use-mutation";
 import { createVessel } from "../api";
+import type { Vessel } from "../types";
 import { useVessels } from "../vessels-context";
+
+const registeredOn = (vessel: Vessel) =>
+  new Date(vessel.created_at).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
 export function VesselsSection() {
   const { vessels, loading, error: loadError, refreshVessels } = useVessels();
   const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const error = saveError ?? loadError;
+  const register = useMutation(createVessel, {
+    onSuccess: refreshVessels,
+    errorMessage: "Failed to register vessel.",
+  });
+
+  const error = register.error ?? loadError;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || saving) return;
-
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await createVessel(trimmed);
-      await refreshVessels();
-      setName("");
-    } catch {
-      setSaveError("Failed to register vessel.");
-    } finally {
-      setSaving(false);
-    }
+    if (trimmed && (await register.run(trimmed))) setName("");
   };
 
   return (
@@ -46,39 +47,28 @@ export function VesselsSection() {
           maxLength={100}
           className="w-full sm:w-72"
         />
-        <Button type="submit" disabled={saving || !name.trim()}>
-          {saving ? "Registering…" : "Register vessel"}
+        <Button type="submit" disabled={register.busy || !name.trim()}>
+          {register.busy ? "Registering…" : "Register vessel"}
         </Button>
       </form>
 
       {error && <p className="mt-2 text-sm text-accent">{error}</p>}
 
-      <ul className="mt-4 border-t border-rule">
-        {loading && (
-          <li className="py-2 text-sm italic text-muted">Loading vessels…</li>
-        )}
-        {!loading && vessels.length === 0 && (
-          <li className="py-2 text-sm italic text-muted">
-            No vessels registered.
-          </li>
-        )}
-        {vessels.map((vessel) => (
-          <li
-            key={vessel.id}
-            className="flex items-baseline justify-between gap-4 border-b border-rule py-2"
-          >
+      <LedgerList
+        items={vessels}
+        getKey={(vessel) => vessel.id}
+        loading={loading}
+        loadingText="Loading vessels…"
+        emptyText="No vessels registered."
+        renderItem={(vessel) => (
+          <div className="flex items-baseline justify-between gap-4">
             <span className="text-lg">{vessel.name}</span>
             <span className="text-xs text-muted">
-              Registered{" "}
-              {new Date(vessel.created_at).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
+              Registered {registeredOn(vessel)}
             </span>
-          </li>
-        ))}
-      </ul>
+          </div>
+        )}
+      />
     </section>
   );
 }

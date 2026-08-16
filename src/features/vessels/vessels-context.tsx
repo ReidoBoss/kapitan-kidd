@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { useQuery } from "@/lib/hooks/use-query";
 import { fetchVessels } from "./api";
 import type { Vessel } from "./types";
 
@@ -21,28 +15,16 @@ type VesselsContextValue = {
 const VesselsContext = createContext<VesselsContextValue | null>(null);
 
 export function VesselsProvider({ children }: { children: ReactNode }) {
-  const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refreshVessels = useCallback(async () => {
-    try {
-      setVessels(await fetchVessels());
-      setError(null);
-    } catch {
-      setError("Failed to load vessels.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshVessels();
-  }, [refreshVessels]);
+  const query = useQuery(fetchVessels, [], "Failed to load vessels.");
 
   return (
     <VesselsContext
-      value={{ vessels, loading, error, refreshVessels }}
+      value={{
+        vessels: query.data ?? [],
+        loading: query.loading,
+        error: query.error,
+        refreshVessels: query.refetch,
+      }}
     >
       {children}
     </VesselsContext>
