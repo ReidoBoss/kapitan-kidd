@@ -9,6 +9,7 @@ import { useSession } from "@/features/auth/session-context";
 import { fetchAssignments } from "@/features/vessel-crews/api";
 import type { Assignment } from "@/features/vessel-crews/types";
 import {
+  attestWorkOrder,
   createWorkOrder,
   fetchWorkOrdersCreatedBy,
   type WorkOrderWithNames,
@@ -25,6 +26,7 @@ export function CaptainWorkOrdersSection() {
   const [issue, setIssue] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const captainId = activeUser?.id;
@@ -62,6 +64,20 @@ export function CaptainWorkOrdersSection() {
   const handleVesselChange = (nextVesselId: string) => {
     setVesselId(nextVesselId);
     setCrewId("");
+  };
+
+  const handleAttest = async (workOrderId: string) => {
+    if (busyId) return;
+    setBusyId(workOrderId);
+    setError(null);
+    try {
+      await attestWorkOrder(workOrderId);
+      setOrders(await fetchWorkOrdersCreatedBy(captainId));
+    } catch {
+      setError("Failed to attest work order.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -191,6 +207,39 @@ export function CaptainWorkOrdersSection() {
             <p className="text-sm text-muted">
               {order.vesselName} &middot; assigned to {order.crewName}
             </p>
+
+            {order.status === "Done" && (
+              <div className="mt-1 text-sm">
+                {order.solution && (
+                  <p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted">
+                      Solution&nbsp;
+                    </span>
+                    {order.solution}
+                  </p>
+                )}
+                {order.attested_at ? (
+                  <p className="italic text-done">
+                    Attested on{" "}
+                    {new Date(order.attested_at).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    .
+                  </p>
+                ) : (
+                  <div className="mt-2">
+                    <Button
+                      onClick={() => handleAttest(order.id)}
+                      disabled={busyId === order.id}
+                    >
+                      {busyId === order.id ? "Attesting…" : "Attest & close"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </li>
         ))}
       </ul>

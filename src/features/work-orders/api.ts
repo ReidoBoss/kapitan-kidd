@@ -75,6 +75,22 @@ export async function createWorkOrder(input: {
 }
 
 /**
+Attest a Done work order: sets attested_at, fully closing the record.
+The filters guard against attesting twice or attesting a non-Done order.
+*/
+export async function attestWorkOrder(workOrderId: string): Promise<void> {
+  const done: WorkOrderStatus = "Done";
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ attested_at: new Date().toISOString() })
+    .eq("id", workOrderId)
+    .eq("status", done)
+    .is("attested_at", null);
+
+  if (error) throw error;
+}
+
+/**
 Open -> In Progress. The status filter guards against stale UI state.
 */
 export async function startWorkOrder(workOrderId: string): Promise<void> {
