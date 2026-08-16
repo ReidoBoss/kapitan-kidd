@@ -31,3 +31,7 @@ The grants are seeded in [supabase/seeds/01_rbac.sql](./supabase/seeds/01_rbac.s
 
 
 
+
+## Database Schema
+
+The complete schema (tables, columns, types, primary keys, foreign keys, indexes, triggers, and RLS policies) is in [schema.sql](./schema.sql), consolidated from the migration files in [supabase/migrations/](./supabase/migrations/).
