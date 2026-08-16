@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/features/auth/session-context";
+import { UsersSection } from "@/features/users/components/users-section";
 import { VesselsSection } from "@/features/vessels/components/vessels-section";
 
 export default function Home() {
@@ -26,7 +27,12 @@ export default function Home() {
       <h1 className="mt-1 text-3xl font-bold">Welcome, {activeUser.name}</h1>
       <div className="mt-4 border-b border-rule" />
 
-      {activeUser.role === "Admin" && <VesselsSection />}
+      {activeUser.role === "Admin" && (
+        <>
+          <VesselsSection />
+          <UsersSection />
+        </>
+      )}
     </div>
   );
 }
