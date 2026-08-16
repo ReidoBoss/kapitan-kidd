@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
-import type { WorkOrder } from "./types";
+import type { WorkOrder, WorkOrderStatus } from "./types";
 
 export type WorkOrderWithNames = WorkOrder & {
   crewName: string;
@@ -70,6 +70,39 @@ export async function createWorkOrder(input: {
     title: input.title,
     issue: input.issue,
   });
+
+  if (error) throw error;
+}
+
+/**
+Open -> In Progress. The status filter guards against stale UI state.
+*/
+export async function startWorkOrder(workOrderId: string): Promise<void> {
+  const from: WorkOrderStatus = "Open";
+  const to: WorkOrderStatus = "In Progress";
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status: to })
+    .eq("id", workOrderId)
+    .eq("status", from);
+
+  if (error) throw error;
+}
+
+/**
+In Progress -> Done, documenting the solution in the same update.
+*/
+export async function completeWorkOrder(
+  workOrderId: string,
+  solution: string,
+): Promise<void> {
+  const from: WorkOrderStatus = "In Progress";
+  const to: WorkOrderStatus = "Done";
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status: to, solution })
+    .eq("id", workOrderId)
+    .eq("status", from);
 
   if (error) throw error;
 }
