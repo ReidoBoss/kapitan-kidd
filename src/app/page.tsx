@@ -5,6 +5,7 @@ import { UsersSection } from "@/features/users/components/users-section";
 import { AssignmentsSection } from "@/features/vessel-crews/components/assignments-section";
 import { VesselsSection } from "@/features/vessels/components/vessels-section";
 import { VesselsProvider } from "@/features/vessels/vessels-context";
+import { CaptainWorkOrdersSection } from "@/features/work-orders/components/captain-work-orders-section";
 
 export default function Home() {
   const { activeUser, loading, error } = useSession();
@@ -28,6 +29,8 @@ export default function Home() {
       </p>
       <h1 className="mt-1 text-3xl font-bold">Welcome, {activeUser.name}</h1>
       <div className="mt-4 border-b border-rule" />
+
+      {activeUser.role === "Captain" && <CaptainWorkOrdersSection />}
 
       {activeUser.role === "Admin" && (
         <VesselsProvider>
