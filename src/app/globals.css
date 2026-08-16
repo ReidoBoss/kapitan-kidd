@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
-/* Captain's Logbook palette — aged paper, iron-gall ink, stamp red, maritime navy */
+/* Naval Chart palette - chart paper, blue-black ink, signal red, chart blue */
 :root {
-  --background: #f6f1e4;
-  --foreground: #2b2318;
-  --muted: #7a6f5d;
-  --rule: #d9cfb8;
-  --accent: #8f2f2f;
-  --navy: #274060;
-  --done: #3f6b4f;
+  --background: #f2f4f1;
+  --foreground: #1c2a38;
+  --muted: #5f6f7d;
+  --rule: #c9d2d4;
+  --accent: #b3352f;
+  --navy: #2a5d8f;
+  --done: #3d7a5c;
 }
 
 @theme inline {
@@ -23,16 +23,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Night watch — lamplit parchment on dark leather */
+/* Night bridge - moonlit paper on deep bridge dark */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #211b12;
-    --foreground: #e9dfc7;
-    --muted: #a2947a;
-    --rule: #40372a;
-    --accent: #cf6f64;
-    --navy: #8fb0d1;
-    --done: #86ab8e;
+    --background: #101820;
+    --foreground: #d8e2e8;
+    --muted: #8496a4;
+    --rule: #2c3a47;
+    --accent: #e07a70;
+    --navy: #7fb2dc;
+    --done: #7fb894;
   }
 }
 
