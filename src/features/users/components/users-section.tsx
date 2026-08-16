@@ -1,61 +1,44 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LedgerList } from "@/components/ui/ledger-list";
 import { Select } from "@/components/ui/select";
 import { useSession } from "@/features/auth/session-context";
+import { useMutation } from "@/lib/hooks/use-mutation";
+import { useQuery } from "@/lib/hooks/use-query";
 import { createUser, fetchRoles } from "../api";
-import { ASSIGNABLE_ROLES, type UserRole } from "../types";
+import { assignableRolesOf } from "../derive";
+
+const enlistErrorMessage = (cause: unknown) =>
+  (cause as { code?: string }).code === "23505"
+    ? "A member with that name is already enlisted."
+    : "Failed to enlist member.";
 
 export function UsersSection() {
   const { users, refreshUsers } = useSession();
-  const [roles, setRoles] = useState<UserRole[]>([]);
+  const rolesQuery = useQuery(fetchRoles, [], "Failed to load roles.");
+  const roles = assignableRolesOf(rolesQuery.data ?? []);
+
   const [name, setName] = useState("");
-  const [roleId, setRoleId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pickedRoleId, setPickedRoleId] = useState<number | null>(null);
+  const roleId = pickedRoleId ?? roles[0]?.id ?? null;
 
-  useEffect(() => {
-    let cancelled = false;
+  const enlist = useMutation(createUser, {
+    onSuccess: async () => {
+      await refreshUsers();
+    },
+    errorMessage: enlistErrorMessage,
+  });
 
-    fetchRoles()
-      .then((fetched) => {
-        if (cancelled) return;
-        const assignable = fetched.filter((role) =>
-          (ASSIGNABLE_ROLES as readonly string[]).includes(role.name),
-        );
-        setRoles(assignable);
-        setRoleId((current) => current ?? assignable[0]?.id ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load roles.");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const error = enlist.error ?? rolesQuery.error;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || roleId === null || saving) return;
-
-    setSaving(true);
-    setError(null);
-    try {
-      await createUser(trimmed, roleId);
-      await refreshUsers();
+    if (trimmed && roleId !== null && (await enlist.run(trimmed, roleId))) {
       setName("");
-    } catch (cause) {
-      setError(
-        (cause as { code?: string }).code === "23505"
-          ? "A member with that name is already enlisted."
-          : "Failed to enlist member.",
-      );
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -77,7 +60,7 @@ export function UsersSection() {
           value={roleId ?? ""}
           disabled={roles.length === 0}
           aria-label="Role"
-          onChange={(event) => setRoleId(Number(event.target.value))}
+          onChange={(event) => setPickedRoleId(Number(event.target.value))}
         >
           {roles.length === 0 && <option value="">Loading…</option>}
           {roles.map((role) => (
@@ -86,29 +69,29 @@ export function UsersSection() {
             </option>
           ))}
         </Select>
-        <Button type="submit" disabled={saving || !name.trim() || roleId === null}>
-          {saving ? "Enlisting…" : "Enlist member"}
+        <Button
+          type="submit"
+          disabled={enlist.busy || !name.trim() || roleId === null}
+        >
+          {enlist.busy ? "Enlisting…" : "Enlist member"}
         </Button>
       </form>
 
       {error && <p className="mt-2 text-sm text-accent">{error}</p>}
 
-      <ul className="mt-4 border-t border-rule">
-        {users.length === 0 && (
-          <li className="py-2 text-sm italic text-muted">No members enlisted.</li>
-        )}
-        {users.map((user) => (
-          <li
-            key={user.id}
-            className="flex items-baseline justify-between gap-4 border-b border-rule py-2"
-          >
+      <LedgerList
+        items={users}
+        getKey={(user) => user.id}
+        emptyText="No members enlisted."
+        renderItem={(user) => (
+          <div className="flex items-baseline justify-between gap-4">
             <span className="text-lg">{user.name}</span>
             <span className="text-[11px] uppercase tracking-[0.2em] text-muted">
               {user.role}
             </span>
-          </li>
-        ))}
-      </ul>
+          </div>
+        )}
+      />
     </section>
   );
 }
