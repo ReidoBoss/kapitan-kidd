@@ -1,36 +1,18 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createVessel, fetchVessels } from "../api";
-import type { Vessel } from "../types";
+import { createVessel } from "../api";
+import { useVessels } from "../vessels-context";
 
 export function VesselsSection() {
-  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const { vessels, loading, error: loadError, refreshVessels } = useVessels();
   const [name, setName] = useState("");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchVessels()
-      .then((fetched) => {
-        if (!cancelled) setVessels(fetched);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load vessels.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const error = saveError ?? loadError;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -38,13 +20,13 @@ export function VesselsSection() {
     if (!trimmed || saving) return;
 
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
-      const vessel = await createVessel(trimmed);
-      setVessels((current) => [vessel, ...current]);
+      await createVessel(trimmed);
+      await refreshVessels();
       setName("");
     } catch {
-      setError("Failed to register vessel.");
+      setSaveError("Failed to register vessel.");
     } finally {
       setSaving(false);
     }
