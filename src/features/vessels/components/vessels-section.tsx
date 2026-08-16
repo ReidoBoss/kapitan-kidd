@@ -33,14 +33,10 @@ export function VesselsSection() {
   };
 
   return (
-    <section className="mt-8">
-      <p className="text-[11px] uppercase tracking-[0.2em] text-muted">
-        Vessel Registry
-      </p>
-
+    <section className="mt-4">
       <form
         onSubmit={handleSubmit}
-        className="mt-2 flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
       >
         <Input
           value={name}
