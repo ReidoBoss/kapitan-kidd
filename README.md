@@ -23,4 +23,11 @@ Built with Next.js (App Router), TypeScript, Tailwind CSS, and Supabase.
 
 A closer view of the role/permission subsystem:
 
+The full design, mapping each requirement to a role grant, is documented in [rbac-pseudo-code.md](./rbac-pseudo-code.md).
+
+The grants are seeded in [supabase/seeds/01_rbac.sql](./supabase/seeds/01_rbac.sql).
+
 ![User RBAC ERD](./User%20RBAC%20ERD.png)
+
+
+
